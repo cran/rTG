@@ -20,7 +20,10 @@ XPSgrowth(
   gom_k = NA,
   brnn_neurons = NA,
   gam_k = NA,
-  gam_sp = NA
+  gam_sp = NA,
+  gom_a_range = c(3000),
+  gom_b_range = seq(50, 1000, 50),
+  gom_k_range = seq(1, 500, 2)
 )
 }
 \arguments{
@@ -67,6 +70,18 @@ the BRNN method}
 \item{gam_k}{numeric, the parameter k for General Additive Model (GAM)}
 
 \item{gam_sp}{numeric, the parameter sp for General Additive Model (GAM)}
+
+\item{gom_a_range}{a numerical vector of the possible values of the
+parameter a, which is considered in the search for the initial Gompertz
+parameter values}
+
+\item{gom_b_range}{a numerical vector of the possible values of the
+parameter b, which is considered in the search for the initial Gompertz
+parameter values}
+
+\item{gom_k_range}{a numerical vector of the possible values of the
+parameter k, which is considered in the search for the initial Gompertz
+parameter values}
 }
 \value{
 a list with the following elements:
@@ -89,9 +104,9 @@ data(data_trees)
 simulation_1 <- XPSgrowth(data_trees = data_trees,
      parameters = parameters,
      ID_vars = c("Species", "Tissue", "Site", "Year", "Tree"),
-     fitting_method = c("gompertz", "gam", "brnn"),
+     fitting_method = c("gam", "brnn"),
      fitted_save = FALSE,
-     search_initial_gom = TRUE,
+     search_initial_gom = FALSE,
      add_zeros = TRUE,
      add_zeros_before = 'min',
      post_process = TRUE)
