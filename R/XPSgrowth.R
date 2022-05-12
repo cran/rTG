@@ -3,11 +3,12 @@
 #' XylemPhloemSeasonalGrowth: This Function fits and compares the selected
 #' methods for modeling seasonal xylem and phloem data.
 #' @param data_trees a data frame with ID variables and wood formation data with
-#' columns DOY and Width
+#' columns doy and width
 #' @param parameters a data frame with ID variables and initial parameter values
 #' for the selected methods
 #' @param search_initial_gom logical, should the algorithm to search initial
-#' Gompertz parameters be applied?
+#' Gompertz parameters be applied? This argument also overwrites manually
+#' defined Gompertz parameter values
 #' @param fitting_method vector of one or more methods to be compared:
 #' "gompertz", "gam", "brnn"
 #' @param ID_vars character vector of variables which indicate column names of
@@ -18,9 +19,9 @@
 #' growing season be added?
 #' @param add_zeros_before if 'min' (character) then zeros will be added prior
 #' to the first observation in each year. Alternatively, users can specify
-#' absolute DOY prior which zeros will be added.
+#' absolute doy prior which zeros will be added.
 #' @param post_process logical, should the post-process algorithm be applied?
-#' @param unified_parameters logical, if FALSE, the algorithm will use only
+#' @param unified_parameters logical, if TRUE, the algorithm will use only
 #' manually selected function parameters. See the arguments 'gom_a', 'gom_b',
 #' 'gom_k', 'brnn_neurons', 'gam_k' and 'gam_sp'. Default is FALSE
 #' @param gom_a numeric, the parameter a for the Gompertz function
@@ -52,18 +53,32 @@
 #' @examples
 #' library(rTG)
 #'
-#' # Load data
+#' # 1 Example on xylem and phloem data
 #' data(parameters)
 #' data(data_trees)
+#'
 #' simulation_1 <- XPSgrowth(data_trees = data_trees,
 #'      parameters = parameters,
 #'      ID_vars = c("Species", "Tissue", "Site", "Year", "Tree"),
-#'      fitting_method = c("gam", "brnn"),
+#'      fitting_method = c("brnn"),
 #'      fitted_save = FALSE,
 #'      search_initial_gom = FALSE,
 #'      add_zeros = TRUE,
 #'      add_zeros_before = 'min',
 #'      post_process = TRUE)
+#'
+#'
+#'
+#' # 2 Example on dendrometer data
+#' data("data_dendrometers")
+#'
+#' simulation_2 <- XPSgrowth(data_dendrometers, unified_parameters = TRUE,
+#'                   ID_vars = c("site", "species", "year", "tree"),
+#'                   fitting_method = c("brnn", "gam"),
+#'                   brnn_neurons = 2, gam_k = 9, gam_sp = 0.5,
+#'                   search_initial_gom = TRUE, add_zeros = FALSE,
+#'                   post_process = TRUE)
+
 
 XPSgrowth <- function(data_trees, parameters = NULL,
                  search_initial_gom = FALSE,
@@ -77,16 +92,17 @@ XPSgrowth <- function(data_trees, parameters = NULL,
                  gom_a = NA, gom_b = NA, gom_k = NA,
                  brnn_neurons = NA,
                  gam_k = NA, gam_sp = NA,
-                 gom_a_range = c(3000), gom_b_range = seq(50, 1000, 50),
+                 gom_a_range = c(1, 3000, 500),
+                 gom_b_range = seq(1, 1000, 50),
                  gom_k_range = seq(1, 500, 2)
                  ){
 
   # Defining global variables
-  Width <- NULL
-  DOY <- NULL
+  width <- NULL
+  doy <- NULL
   key <- NULL
   first_diff <- NULL
-  Width_pred <- NULL
+  width_pred <- NULL
   neg_ind <- NULL
   errors_grid <- NA
   txtProgressBar <- NULL
@@ -97,8 +113,19 @@ XPSgrowth <- function(data_trees, parameters = NULL,
   # Progress bar
   pb <- txtProgressBar(min = 0, max = length(fitting_method), style = 3)
 
-  # 1 are all ID_vars in both tables?
+  # make sure you have doy and width in lowercase
+  if ("DOY" %in% colnames(data_trees)){data_trees <- rename(data_trees, "doy" = "DOY")}
+  if ("Doy" %in% colnames(data_trees)){data_trees <- rename(data_trees, "doy" = "Doy")}
+  if ("WIDTH" %in% colnames(data_trees)){data_trees <- rename(data_trees, "width" = "WIDTH")}
+  if ("Width" %in% colnames(data_trees)){data_trees <- rename(data_trees, "width" = "Width")}
 
+  # If ID_vars is null, we assume that all variables other than doy and width in data_trees are ID_vars
+  if (is.null(ID_vars)){
+    ID_vars <- colnames(data_trees)
+    ID_vars <- ID_vars[!(ID_vars %in% c("doy", "width"))]
+  }
+
+  # 1 are all ID_vars in both tables?
   if(unified_parameters == FALSE){
 
     if (sum(ID_vars %in% colnames(parameters) == FALSE)>0){
@@ -114,13 +141,13 @@ XPSgrowth <- function(data_trees, parameters = NULL,
     stop("Please remove missing values from data_trees")
   }
 
-  # Columns DOY & Width must be present in data_trees
-  if (!("DOY" %in% colnames(data_trees))){
-    stop("Column 'DOY' is missing in data_trees")
+  # Columns doy & width must be present in data_trees
+  if (!("doy" %in% colnames(data_trees))){
+    stop("Column 'doy' is missing in data_trees")
   }
 
-  if (!("Width" %in% colnames(data_trees))){
-    stop("Column 'Width' is missing in data_trees")
+  if (!("width" %in% colnames(data_trees))){
+    stop("Column 'width' is missing in data_trees")
   }
 
 
@@ -134,7 +161,7 @@ XPSgrowth <- function(data_trees, parameters = NULL,
 
       tm_g_p <- c(gom_a, gom_b, gom_k)
 
-      if (sum(is.na(tm_g_p) > 0)){
+      if (sum(is.na(tm_g_p) > 0)   & search_initial_gom == FALSE){
 
         stop("If unified_parameters is used, you must provide Gompertz parameters")
 
@@ -257,7 +284,7 @@ if (current_fitting_method == "gompertz"){
 
       if (add_zeros_before == 'min'){
 
-        min_DOY <- min(temp_data$DOY)
+        min_doy <- min(temp_data$doy)
 
       } else {
 
@@ -267,24 +294,24 @@ if (current_fitting_method == "gompertz"){
 
         }
 
-        min_DOY <- add_zeros_before
+        min_doy <- add_zeros_before
 
       }
 
       row_list <- list()
-      for (J in 1:min_DOY){
+      for (J in 1:min_doy){
         temp_row <- temp_data[1,]
         row_list[[J]] <- temp_row
       }
 
       new_rows <- do.call(rbind, row_list)
-      new_rows$DOY <- c(1:min_DOY)
-      new_rows$Width <- 0
+      new_rows$doy <- c(1:min_doy)
+      new_rows$width <- 0
       new_rows$note <- "added zero"
       temp_data <- rbind(new_rows, temp_data)
     }
 
-    capture.output(output <- try(nls(Width ~ a*exp(-exp(b - k*DOY)), data = temp_data,
+    capture.output(output <- try(nls(width ~ a*exp(-exp(b - k*doy)), data = temp_data,
                       start=list(a = gom_a, b = gom_b, k = gom_k),
                       nls.control(maxiter = 1000, tol = 1e-05,
                                   minFactor = 1/1024, printEval = FALSE,
@@ -293,16 +320,16 @@ if (current_fitting_method == "gompertz"){
     # When all parameters are null, the class can still be nls. Additional check is needed
     parm_test <- c(gom_a, gom_b, gom_k)
 
-    if (class(output) == "nls" & !is.null(parm_test)){
+    if (is(output, "nls") & !is.null(parm_test)){
 
-      temp_data$Width_pred <- predict(output)
+      temp_data$width_pred <- predict(output)
 
-      temp_data <- dplyr::arrange(temp_data, DOY)
+      temp_data <- dplyr::arrange(temp_data, doy)
 
       # all what is below 0.1 goes to 0
       if (post_process == TRUE){
-      temp_data$Width_pred <- ifelse(temp_data$Width_pred  < 0.01, 0,
-                                   temp_data$Width_pred)
+      temp_data$width_pred <- ifelse(temp_data$width_pred  < 0.01, 0,
+                                   temp_data$width_pred)
       }
 
       temp_data$method <- "gompertz"
@@ -312,9 +339,9 @@ if (current_fitting_method == "gompertz"){
 
       if (fitted_save == TRUE){
 
-        ggplot(temp_data, aes(x = DOY, y = Width_pred)) + geom_line() +
-          geom_point(temp_data, mapping = aes(x = DOY, y = Width, alpha = note)) +
-          ylab("Width predicted") + theme_light() + guides(alpha = "none")
+        ggplot(temp_data, aes(x = doy, y = width_pred)) + geom_line() +
+          geom_point(temp_data, mapping = aes(x = doy, y = width, alpha = note)) +
+          ylab("width predicted") + theme_light() + guides(alpha = "none")
 
         ggsave(paste0("gom_", i, ".png"), width = 7, height = 6)
       }
@@ -334,17 +361,17 @@ if (current_fitting_method == "gompertz"){
         gom_b <- par_grid$gom_b[ii]
         gom_k <- par_grid$gom_k[ii]
 
-        capture.output(output <- try(nls(Width ~ a*exp(-exp(b - k*DOY)), data = temp_data,
+        capture.output(output <- try(nls(width ~ a*exp(-exp(b - k*doy)), data = temp_data,
                           start=list(a = gom_a, b = gom_b, k = gom_k),
                           nls.control(maxiter = 1000, tol = 1e-05,
                                       minFactor = 1/1024, printEval = FALSE,
                                       warnOnly = FALSE)), silent=TRUE))
 
-        if (class(output) == "nls"){
+        if (is(output, "nls")){
 
-          temp_data$Width_pred <- predict(output)
+          temp_data$width_pred <- predict(output)
 
-          temp_data <- dplyr::arrange(temp_data, DOY)
+          temp_data <- dplyr::arrange(temp_data, doy)
 
           temp_data$method <- "gompertz"
           temp_data$first_diff <- NULL
@@ -354,9 +381,9 @@ if (current_fitting_method == "gompertz"){
 
           if (fitted_save == TRUE){
 
-            ggplot(temp_data, aes(x = DOY, y = Width_pred)) + geom_line() +
-              geom_point(temp_data, mapping = aes(x = DOY, y = Width, alpha = note)) +
-              ylab("Width predicted") + theme_light() + guides(alpha = "none")
+            ggplot(temp_data, aes(x = doy, y = width_pred)) + geom_line() +
+              geom_point(temp_data, mapping = aes(x = doy, y = width, alpha = note)) +
+              ylab("width predicted") + theme_light() + guides(alpha = "none")
 
             ggsave(paste0("gom_", i, ".png"), width = 7, height = 6)
           }
@@ -404,7 +431,7 @@ if (current_fitting_method == "gompertz"){
 
       if (add_zeros_before == 'min'){
 
-        min_DOY <- min(temp_data$DOY)
+        min_doy <- min(temp_data$doy)
 
       } else {
 
@@ -414,66 +441,59 @@ if (current_fitting_method == "gompertz"){
 
         }
 
-        min_DOY <- add_zeros_before
+        min_doy <- add_zeros_before
 
       }
 
     row_list <- list()
 
-      for (J in 1:min_DOY){
+      for (J in 1:min_doy){
         temp_row <- temp_data[1,]
         row_list[[J]] <- temp_row
       }
       new_rows <- do.call(rbind, row_list)
-      new_rows$DOY <- c(1:min_DOY)
-      new_rows$Width <- 0
+      new_rows$doy <- c(1:min_doy)
+      new_rows$width <- 0
       new_rows$note <- "added zero"
       temp_data <- rbind(new_rows, temp_data)
 
     }
 
-      capture.output(output <- try(brnn(Width ~ DOY, data = temp_data,
-                     neurons = temp_neurons$brnn_neurons[1]), silent=TRUE))
+      capture.output(output <- try(brnn(width ~ doy, data = temp_data,
+                                        neurons = temp_neurons$brnn_neurons[1]), silent=TRUE))
+      temp_data$width_pred <- predict(output)
 
-      temp_data$Width_pred <- predict(output)
-
-      temp_data <- dplyr::arrange(temp_data, DOY)
-
-      # Prediction for DOY 1 must always be 0
-      # temp_data[1, "Width_pred"] <- 0
-
-      # plot(y = temp_data$Width, x = temp_data$DOY, main = i)
-      # lines(y = temp_data$Width_pred, x = temp_data$DOY, type = "l")
+      temp_data <- dplyr::arrange(temp_data, doy)
 
       if (post_process == TRUE){
 
-      avg_fit <- mean(temp_data$Width_pred)
-      max_fit <- max(temp_data$Width_pred)
+      avg_fit <- mean(temp_data$width_pred)
+      max_fit <- max(temp_data$width_pred)
 
-      lagged_Width_pred <- temp_data$Width_pred[-length(temp_data$Width_pred)]
-      lagged_Width_pred <- c(NA, lagged_Width_pred)
+      lagged_width_pred <- temp_data$width_pred[-length(temp_data$width_pred)]
+      lagged_width_pred <- c(NA, lagged_width_pred)
 
-      temp_data$first_diff <- temp_data$Width_pred - lagged_Width_pred
+      temp_data$first_diff <- temp_data$width_pred - lagged_width_pred
       temp_data[1, "first_diff"]  <- temp_data[2, "first_diff"]
 
       # In case of negative predictions
-      if (any(temp_data$Width_pred < 0)){
+      if (any(temp_data$width_pred < 0)){
 
         shortcut1 <- temp_data
-        shortcut1$neg_ind <- ifelse(shortcut1$Width_pred < 0, TRUE, FALSE)
+        shortcut1$neg_ind <- ifelse(shortcut1$width_pred < 0, TRUE, FALSE)
 
-        th_DOY <- as.numeric(max(shortcut1[shortcut1$neg_ind == TRUE, ][, "DOY"]))
+        th_doy <- as.numeric(max(shortcut1[shortcut1$neg_ind == TRUE, ][, "doy"]))
 
-        temp_data$Width_pred <- ifelse(temp_data$DOY <= th_DOY, 0,
-                                     temp_data$Width_pred)
+        temp_data$width_pred <- ifelse(temp_data$doy <= th_doy, 0,
+                                     temp_data$width_pred)
         }
 
-        temp_data$Width_pred <- ifelse(temp_data$first_diff < 0 &
-                                       (temp_data$Width_pred < avg_fit), 0,
-                              ifelse(temp_data$Width_pred < 0, 0,
-                                     temp_data$Width_pred))
+        temp_data$width_pred <- ifelse(temp_data$first_diff < 0 &
+                                       (temp_data$width_pred < avg_fit), 0,
+                              ifelse(temp_data$width_pred < 0, 0,
+                                     temp_data$width_pred))
 
-        test <- temp_data[temp_data$Width_pred > avg_fit, ]
+        test <- temp_data[temp_data$width_pred > avg_fit, ]
         test <- test[test$first_diff < 0, ]
 
       if (sum(test$first_diff < 0, na.rm = TRUE) > 0){
@@ -481,21 +501,21 @@ if (current_fitting_method == "gompertz"){
         for (J in 1:nrow(temp_data)){
 
 
-          if (temp_data[J, "Width_pred"] < 0.0001){
+          if (temp_data[J, "width_pred"] < 0.0001){
 
             next()
 
           } else if (temp_data[J, "first_diff"] < 0){
 
-            temp_data[J, "Width_pred"] <- temp_data[J - 1, "Width_pred"]
+            temp_data[J, "width_pred"] <- temp_data[J - 1, "width_pred"]
 
-          } else if ((temp_data[J, "Width_pred"] - temp_data[J - 1, "Width_pred"]) < 0){
+          } else if ((temp_data[J, "width_pred"] - temp_data[J - 1, "width_pred"]) < 0){
 
-            temp_data[J, "Width_pred"] <- temp_data[J - 1, "Width_pred"]
+            temp_data[J, "width_pred"] <- temp_data[J - 1, "width_pred"]
 
           } else {
 
-            temp_data[J, "Width_pred"] <- temp_data[J, "Width_pred"]
+            temp_data[J, "width_pred"] <- temp_data[J, "width_pred"]
 
           }
 
@@ -504,8 +524,8 @@ if (current_fitting_method == "gompertz"){
       }
     }
 
-      # plot(y = temp_data$Width, x = temp_data$DOY, main = i)
-      # lines(y = temp_data$Width_pred, x = temp_data$DOY, type = "l")
+      # plot(y = temp_data$width, x = temp_data$doy, main = i)
+      # lines(y = temp_data$width_pred, x = temp_data$doy, type = "l")
 
       temp_data$first_diff <- NULL
       temp_data$method <- "brnn"
@@ -515,9 +535,9 @@ if (current_fitting_method == "gompertz"){
 
       if (fitted_save == TRUE){
 
-        ggplot(temp_data, aes(x = DOY, y = Width_pred)) + geom_line() +
-          geom_point(temp_data, mapping = aes(x = DOY, y = Width, alpha = note)) +
-          ylab("Width predicted") + theme_light() + guides(alpha = "none")
+        ggplot(temp_data, aes(x = doy, y = width_pred)) + geom_line() +
+          geom_point(temp_data, mapping = aes(x = doy, y = width, alpha = note)) +
+          ylab("width predicted") + theme_light() + guides(alpha = "none")
 
         ggsave(paste0("brnn_", i, ".png"), width = 7, height = 6)
       }
@@ -542,7 +562,7 @@ if (current_fitting_method == "gompertz"){
 
       if (add_zeros_before == 'min'){
 
-        min_DOY <- min(temp_data$DOY)
+        min_doy <- min(temp_data$doy)
 
       } else {
 
@@ -552,67 +572,67 @@ if (current_fitting_method == "gompertz"){
 
         }
 
-        min_DOY <- add_zeros_before
+        min_doy <- add_zeros_before
 
       }
 
       row_list <- list()
-      for (J in 1:min_DOY){
+      for (J in 1:min_doy){
         temp_row <- temp_data[1,]
         row_list[[J]] <- temp_row
       }
       new_rows <- do.call(rbind, row_list)
-      new_rows$DOY <- c(1:min_DOY)
-      new_rows$Width <- 0
+      new_rows$doy <- c(1:min_doy)
+      new_rows$width <- 0
       new_rows$note <- "added zero"
 
       temp_data <- rbind(new_rows, temp_data)
-      temp_data$Width <- as.numeric(temp_data$Width)
+      temp_data$width <- as.numeric(temp_data$width)
     }
 
-      output <- gam(Width ~ s(DOY, k = gam_k[1], bs ="ps", sp = gam_sp[1]),
+      output <- gam(width ~ s(doy, k = gam_k[1], bs ="ps", sp = gam_sp[1]),
                     data = temp_data, method = "REML")
 
-      temp_data$Width_pred <- predict(output)
+      temp_data$width_pred <- predict(output)
 
-      temp_data <- dplyr::arrange(temp_data, DOY)
+      temp_data <- dplyr::arrange(temp_data, doy)
 
-      # plot(y = temp_data$Width, x = temp_data$DOY, main = i)
-      # lines(y = temp_data$Width_pred, x = temp_data$DOY, type = "l")
+      # plot(y = temp_data$width, x = temp_data$doy, main = i)
+      # lines(y = temp_data$width_pred, x = temp_data$doy, type = "l")
 
       if (post_process == TRUE){
 
       avg_fit <- ifelse(
-        add_zeros == TRUE, mean(temp_data$Width_pred),
-        mean(temp_data$Width_pred)/2 ) # That is a rule of thumb, but works nice for all the data
+        add_zeros == TRUE, mean(temp_data$width_pred),
+        mean(temp_data$width_pred)/2 ) # That is a rule of thumb, but works nice for all the data
 
 
-      max_fit <- max(temp_data$Width_pred)
+      max_fit <- max(temp_data$width_pred)
 
-      lagged_Width_pred <- temp_data$Width_pred[-length(temp_data$Width_pred)]
-      lagged_Width_pred <- c(NA, lagged_Width_pred)
+      lagged_width_pred <- temp_data$width_pred[-length(temp_data$width_pred)]
+      lagged_width_pred <- c(NA, lagged_width_pred)
 
-      temp_data$first_diff <- temp_data$Width_pred - lagged_Width_pred
+      temp_data$first_diff <- temp_data$width_pred - lagged_width_pred
       temp_data[1, "first_diff"]  <- temp_data[2, "first_diff"]
 
       # In case of negative predictions
-      if (sum(temp_data$Width_pred < 0, na.rm = TRUE) > 0){
+      if (sum(temp_data$width_pred < 0, na.rm = TRUE) > 0){
 
         shortcut1 <- temp_data
-        shortcut1$neg_ind <- ifelse(shortcut1$Width_pred < 0, TRUE, FALSE)
+        shortcut1$neg_ind <- ifelse(shortcut1$width_pred < 0, TRUE, FALSE)
 
-        th_DOY <- as.numeric(max(shortcut1[shortcut1$neg_ind == TRUE, ][, "DOY"]))
-        temp_data$Width_pred <- ifelse(temp_data$DOY <= th_DOY, 0,
-                                     temp_data$Width_pred)
+        th_doy <- as.numeric(max(shortcut1[shortcut1$neg_ind == TRUE, ][, "doy"]))
+        temp_data$width_pred <- ifelse(temp_data$doy <= th_doy, 0,
+                                     temp_data$width_pred)
 
         }
 
-      temp_data$Width_pred <- ifelse(temp_data$first_diff < 0 &
-                                     (temp_data$Width_pred < avg_fit), 0,
-                                   ifelse(temp_data$Width_pred < 0, 0,
-                                          temp_data$Width_pred))
+      temp_data$width_pred <- ifelse(temp_data$first_diff < 0 &
+                                     (temp_data$width_pred < avg_fit), 0,
+                                   ifelse(temp_data$width_pred < 0, 0,
+                                          temp_data$width_pred))
 
-      test <- temp_data[temp_data$Width_pred > avg_fit, ]
+      test <- temp_data[temp_data$width_pred > avg_fit, ]
       test <- test[test$first_diff < 0, ]
 
       if (sum(test$first_diff < 0, na.rm = TRUE) > 0){}
@@ -621,28 +641,28 @@ if (current_fitting_method == "gompertz"){
 
         J_shift <- ifelse(J == 1, 0, 1)
 
-        if (temp_data[J, "Width_pred"] < 0.0001){
+        if (temp_data[J, "width_pred"] < 0.0001){
 
           next()
 
         } else if (temp_data[J, "first_diff"] < 0){
 
-          temp_data[J, "Width_pred"] <- temp_data[J - J_shift, "Width_pred"]
+          temp_data[J, "width_pred"] <- temp_data[J - J_shift, "width_pred"]
 
-        } else if ((temp_data[J, "Width_pred"] - temp_data[J - J_shift, "Width_pred"]) < 0){
+        } else if ((temp_data[J, "width_pred"] - temp_data[J - J_shift, "width_pred"]) < 0){
 
-          temp_data[J, "Width_pred"] <- temp_data[J - J_shift, "Width_pred"]
+          temp_data[J, "width_pred"] <- temp_data[J - J_shift, "width_pred"]
 
         } else {
 
-          temp_data[J, "Width_pred"] <- temp_data[J, "Width_pred"]
+          temp_data[J, "width_pred"] <- temp_data[J, "width_pred"]
 
           }
 
         }
 
-       # plot(y = temp_data$Width, x = temp_data$DOY, main = i)
-       # lines(y = temp_data$Width_pred, x = temp_data$DOY, type = "l")
+       # plot(y = temp_data$width, x = temp_data$doy, main = i)
+       # lines(y = temp_data$width_pred, x = temp_data$doy, type = "l")
 
       }
 
@@ -653,9 +673,9 @@ if (current_fitting_method == "gompertz"){
 
       if (fitted_save == TRUE){
 
-        ggplot(temp_data, aes(x = DOY, y = Width_pred)) + geom_line() +
-          geom_point(temp_data, mapping = aes(x = DOY, y = Width, alpha = note)) +
-          ylab("Width predicted") + theme_light() + guides(alpha = "none")
+        ggplot(temp_data, aes(x = doy, y = width_pred)) + geom_line() +
+          geom_point(temp_data, mapping = aes(x = doy, y = width, alpha = note)) +
+          ylab("width predicted") + theme_light() + guides(alpha = "none")
 
         ggsave(paste0("gam_", i, ".png"), width = 7, height = 6)
       }
