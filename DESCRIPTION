@@ -1,7 +1,7 @@
 Package: rTG
 Type: Package
 Title: Methods to Analyse Seasonal Radial Tree Growth Data
-Version: 1.0.2
+Version: 1.0.3
 Author: Jernej Jevsenak [aut, cre]
 Maintainer: Jernej Jevsenak <jernej.jevsenak@gmail.com>
 Description: Methods for comparing different regression algorithms for 
@@ -26,5 +26,5 @@ NeedsCompilation: no
 Repository: CRAN
 RoxygenNote: 7.1.2
 Config/testthat/edition: 3
-Packaged: 2024-02-03 18:18:38 UTC; JernejJ
-Date/Publication: 2024-02-03 18:30:02 UTC
+Packaged: 2024-07-25 13:08:13 UTC; JernejJ
+Date/Publication: 2024-07-25 14:30:08 UTC
