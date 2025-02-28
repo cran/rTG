@@ -104,26 +104,14 @@
 #'      ID_vars = c("Species", "Tissue", "Site", "Year"),
 #'      fitting_method = c("double_gompertz"),
 #'      fitted_save = FALSE,
-#'      search_initial_double_gom = FALSE,
-#'      unified_parameters = TRUE,
-#'      add_zeros = TRUE,
-#'      add_zeros_before = 'min',
-#'      d_gom_a1 = 0.204, d_gom_a2 = 0.240,
-#'      d_gom_b1 = 2.433, d_gom_b2 = 2.900,
-#'      d_gom_k1 = 0.974, d_gom_k2 = 0.963,
-#'      post_process = TRUE)
-#'
-#' # 1b Example on Double Gompertz function without initial parameters
-#' simulation_1c <- XPSgrowth(data_trees = data_trees,
-#'      parameters = parameters,
-#'      ID_vars = c("Species", "Tissue", "Site", "Year"),
-#'      fitting_method = c("double_gompertz"),
-#'      fitted_save = FALSE,
 #'      search_initial_double_gom = TRUE,
-#'      post_process = TRUE)
+#'      add_zeros = TRUE)
+#'
+#'  plot(simulation_1b)
 #'
 #' # Obtain model parameters
-#' simulation_1c$double_gompertz_model_parameters
+#' simulation_1b$double_gompertz_model_parameters
+#'
 #' }
 #'
 #' # 2 Example on dendrometer data
@@ -135,12 +123,13 @@
 #'                   brnn_neurons = 2, gam_k = 9, gam_sp = 0.5,
 #'                   search_initial_gom = TRUE, add_zeros = FALSE,
 #'                   post_process = TRUE)
-
+#'
+#' plot(simulation_2)
 
 XPSgrowth <- function(data_trees, parameters = NULL,
-                 search_initial_gom = FALSE,
-                 search_initial_double_gom = FALSE,
-                 fitting_method = c("gompertz", "GAM", "brnn"),
+                 search_initial_gom = TRUE,
+                 search_initial_double_gom = TRUE,
+                 fitting_method = c("gompertz", "GAM", "brnn", "double_gompertz"),
                  ID_vars = NULL,
                  fitted_save = FALSE,
                  add_zeros = TRUE,
@@ -194,17 +183,6 @@ XPSgrowth <- function(data_trees, parameters = NULL,
     ID_vars <- ID_vars[!(ID_vars %in% c("doy", "width"))]
   }
 
-  # 1 are all ID_vars in both tables?
-  if(unified_parameters == FALSE){
-
-    if (sum(ID_vars %in% colnames(parameters) == FALSE)>0){
-      stop("check your ID_vars, they don't exist in your parameters")
-    }
-  }
-
-  if (sum(ID_vars %in% colnames(data_trees) == FALSE)>0){
-    stop("check your ID_vars, they don't exist in your data_treses")
-  }
 
   if (sum(is.na(data_trees)) > 0){
     stop("Please remove missing values from data_trees")
@@ -222,6 +200,98 @@ XPSgrowth <- function(data_trees, parameters = NULL,
 
   # Just in case, convert fitting methods to lowercase
   fitting_method <- tolower(fitting_method)
+
+  # If parameters table is provided, we make sure that all combinations are present
+  if (!is.null(parameters)){
+  distinct_combinations_data <- data_trees %>% dplyr::select(all_of(ID_vars)) %>% distinct()
+  distinct_combinations_data <- distinct_combinations_data %>% mutate_all(as.character)
+
+  distinct_combinations_parameters <- parameters %>% dplyr::select(all_of(ID_vars)) %>% distinct()
+  distinct_combinations_parameters <- distinct_combinations_parameters %>% mutate_all(as.character)
+
+  missing_rows <- anti_join(distinct_combinations_data, distinct_combinations_parameters,
+                            by = colnames(distinct_combinations_data))
+
+  if (nrow(missing_rows) > 0){
+
+    stop(
+      "data_trees and parameters do not match\n
+      The following rows are missing:\n",
+      paste(apply(missing_rows, 1, paste, collapse = " | "), collapse = "\n")
+    )
+
+  }
+
+  }
+
+  # In case parameters table is missing, we simulate one
+  if (is.null(parameters)){
+
+    parameters <- data_trees %>% dplyr::select(all_of(ID_vars)) %>% distinct() %>%
+
+      mutate(
+        gom_a =  3000,
+        gom_b = 2000,
+        gom_k = 10,
+
+        d_gom_a1 = 3000,
+        d_gom_a2 = 3000,
+        d_gom_b1 = 2000,
+        d_gom_b2 = 2000,
+        d_gom_k1 = 10,
+        d_gom_k2 = 10,
+
+        brnn_neurons = 3,
+        gam_k = 10,
+        gam_sp = 0.5)
+
+    if ("gam" %in% fitting_method & unified_parameters == FALSE){
+
+      warning("No parameters for GAM were provided. The following default values will be used: gam_k = 10 and gam_sp = 0.5")
+
+    }
+
+    if ("brnn" %in% fitting_method & unified_parameters == FALSE){
+
+      warning("No parameters for brnn were provided. The following default values will be used: brnn_n = 3")
+
+    }
+
+    if ("gompertz" %in% fitting_method & unified_parameters == FALSE & search_initial_gom == FALSE){
+
+      warning("the parameter search_initial_gompertz was set to TRUE")
+
+      search_initial_gom = TRUE
+
+    }
+
+
+    if ("double_gompertz" %in% fitting_method & unified_parameters == FALSE & search_initial_double_gom == FALSE){
+
+      warning("the parameter search_initial_double_gom was set to TRUE")
+
+      search_initial_double_gom = TRUE
+
+    }
+
+
+
+
+  }
+
+
+  # 1 are all ID_vars in both tables?
+  if(unified_parameters == FALSE){
+
+    if (sum(ID_vars %in% colnames(parameters) == FALSE)>0){
+      stop("check your ID_vars, they don't exist in your parameters")
+    }
+  }
+
+  if (sum(ID_vars %in% colnames(data_trees) == FALSE)>0){
+    stop("check your ID_vars, they don't exist in your data_treses")
+  }
+
 
   # If you use unified parameters, you must provide them
   if (unified_parameters == TRUE){
@@ -267,6 +337,7 @@ XPSgrowth <- function(data_trees, parameters = NULL,
       if (sum(is.na(tm_g_p) > 0)){
 
         stop("If unified_parameters is used, you must provide GAM parameters")
+
 
       }
     }
@@ -1158,6 +1229,27 @@ if (current_fitting_method == "gompertz"){
 
 } # end of ut
 
+
+  if (is.null(do.call(rbind, list_temps))){
+
+
+
+    if ("double_gompertz" %in% fitting_method & search_initial_double_gom == FALSE){
+
+      stop("all trials to fit the data failed. \ntry to set the parameter search_initial_double_gom = TRUE ")
+
+    }
+
+    if ("gompertz" %in% fitting_method & search_initial_gom == FALSE){
+
+      stop("all trials to fit the data failed. \ntry to set the parameter search_initial_gom = TRUE ")
+
+    }
+
+
+  }
+
+
   output_list <- list(fitted = do.call(rbind, list_temps),
                       gompertz_initial_parameters = final_parameters,
                       gompertz_initial_parameters_errors = errors_grid,
@@ -1172,9 +1264,3 @@ if (current_fitting_method == "gompertz"){
   return(output_list)
 
 }
-
-
-
-
-
-

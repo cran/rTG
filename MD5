@@ -1,7 +1,7 @@
-cdb1ba0007adaa4385fbf12c530e7762 *DESCRIPTION
-63e22e68ce2e0f1647fc1cc59e980b4d *NAMESPACE
-b741d94a83922aeeccc1386c403613ee *NEWS.md
-35d7761d5cbd54e35e79ca758a3d305b *R/XPSgrowth.R
+7e70d15aee1e20cf23e8821540dea0b3 *DESCRIPTION
+98b63b365650ed20740d259e0b9e7f4f *NAMESPACE
+a61930154d04f2aba3db0339fc8a42fb *NEWS.md
+4adffba787be46f0eb742398e26dc514 *R/XPSgrowth.R
 0accbcb38623e8714aa184df7121a8bf *R/data_dendrometers.R
 87facbbf07cc7d68cd47b77c44ed768a *R/data_trees.R
 e92b2c6a827bbbd2b488276f1bc659dc *R/double_gompertz.R
@@ -12,10 +12,10 @@ e260088f130d27af0237fe8447e46f5b *data/data_dendrometers.rda
 0aaceda96a545bd97f30cad29d1c6ade *data/data_trees.rda
 03964b1d62927280b07f5bb02801e743 *data/parameters.rda
 2434bdb9b409d35a577a4c16b56a2566 *inst/CITATION
-146bd171d567e38f21da0824569718c5 *man/XPSgrowth.Rd
-59f482a2deb51ca7d03f3344829e734c *man/data_dendrometers.Rd
-b244fa853c3723516c0302a06fa00f41 *man/data_trees.Rd
-1b969b7671358236238c7e9649d9cee5 *man/double_gompertz.Rd
-55c381d89d85997c1c908c9418643aaf *man/parameters.Rd
+fd62783ea455466467a443127948f0d7 *man/XPSgrowth.Rd
+07df8d02c5243f20adf29870147e2d3a *man/data_dendrometers.Rd
+b7a54287cf9a779d9cc133f78b1d67a8 *man/data_trees.Rd
+cb942db63672b12aa097cb9550326b4b *man/double_gompertz.Rd
+7c8758f6e7729a6acdf258497814ab1c *man/parameters.Rd
 d935d8e1d62b14dfb68a5b281099aa2a *tests/testthat.R
 ee54f161265fc510bcd65ae598317960 *tests/testthat/test_general.R
